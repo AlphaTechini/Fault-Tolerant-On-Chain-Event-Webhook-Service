@@ -4,6 +4,7 @@ import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-
 import { env } from './config';
 import { connectDB } from './db';
 import subscriptionRoutes from './routes/subscriptions';
+import authRoutes from './routes/auth';
 import { startEventListener } from './services/listener';
 import { startDeliveryService } from './services/delivery';
 
@@ -28,6 +29,7 @@ const start = async () => {
 
         // Routes
         await app.register(subscriptionRoutes);
+        await app.register(authRoutes);
 
         app.get('/', async (request, reply) => {
             return { status: 'ok', service: 'Event Webhook Service' };

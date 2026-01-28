@@ -76,3 +76,32 @@ const DeliveryAttemptSchema: Schema = new Schema({
 });
 
 export const DeliveryAttempt = mongoose.model<IDeliveryAttempt>('DeliveryAttempt', DeliveryAttemptSchema);
+
+// --- User ---
+export enum AuthProvider {
+    EMAIL = 'email',
+    GOOGLE = 'google',
+    GITHUB = 'github',
+}
+
+export interface IUser extends Document {
+    email: string;
+    passwordHash?: string; // Optional for OAuth users
+    name: string;
+    provider: AuthProvider;
+    providerId?: string; // OAuth provider's user ID
+    createdAt: Date;
+}
+
+const UserSchema: Schema = new Schema({
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    passwordHash: { type: String }, // Only required for email provider
+    name: { type: String, required: true, trim: true },
+    provider: { type: String, enum: Object.values(AuthProvider), default: AuthProvider.EMAIL },
+    providerId: { type: String }, // For OAuth providers
+}, { timestamps: true });
+
+// Compound index for OAuth lookups
+UserSchema.index({ provider: 1, providerId: 1 });
+
+export const User = mongoose.model<IUser>('User', UserSchema);

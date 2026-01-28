@@ -1,8 +1,85 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+
 	// Dashboard state
 	let activeTab = $state('overview');
 	let showCreateModal = $state(false);
 	let modalType = $state<'apiKey' | 'subscription' | 'webhook' | null>(null);
+	let isLoading = $state(true);
+
+	// User state
+	let user = $state<{ id: string; email: string; name: string; provider?: string } | null>(null);
+
+	const API_URL = 'http://localhost:3000';
+
+	// Check authentication on mount
+	onMount(async () => {
+		if (!browser) return;
+
+		const token = localStorage.getItem('token');
+		if (!token) {
+			window.location.href = '/login';
+			return;
+		}
+
+		// Try to get user from localStorage first
+		const storedUser = localStorage.getItem('user');
+		if (storedUser) {
+			try {
+				user = JSON.parse(storedUser);
+			} catch (e) {
+				// Invalid stored user, fetch from API
+			}
+		}
+
+		// Verify token and get fresh user data
+		try {
+			const response = await fetch(`${API_URL}/api/auth/me`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+
+			if (!response.ok) {
+				// Token invalid, redirect to login
+				localStorage.removeItem('token');
+				localStorage.removeItem('user');
+				window.location.href = '/login';
+				return;
+			}
+
+			const data = await response.json();
+			user = data.user;
+			localStorage.setItem('user', JSON.stringify(data.user));
+		} catch (error) {
+			// If we have a stored user, continue with that
+			if (!user) {
+				localStorage.removeItem('token');
+				localStorage.removeItem('user');
+				window.location.href = '/login';
+				return;
+			}
+		}
+
+		isLoading = false;
+	});
+
+	function logout() {
+		if (browser) {
+			localStorage.removeItem('token');
+			localStorage.removeItem('user');
+			window.location.href = '/';
+		}
+	}
+
+	// Get user initials for avatar
+	function getUserInitials(name: string): string {
+		if (!name) return '??';
+		const parts = name.trim().split(' ');
+		if (parts.length >= 2) {
+			return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+		}
+		return name.slice(0, 2).toUpperCase();
+	}
 
 	// Mock data for demonstration
 	const stats = {
@@ -177,8 +254,15 @@
 			<div class="top-bar-actions">
 				<a href="/docs" class="top-link">Docs</a>
 				<div class="user-menu">
-					<span class="user-avatar">JD</span>
-					<span class="user-name">John Doe</span>
+					<span class="user-avatar">{user ? getUserInitials(user.name) : '??'}</span>
+					<span class="user-name">{user?.name || 'Loading...'}</span>
+					<button class="logout-btn" onclick={logout} title="Sign out">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+							<polyline points="16,17 21,12 16,7"/>
+							<line x1="21" y1="12" x2="9" y2="12"/>
+						</svg>
+					</button>
 				</div>
 			</div>
 		</header>
@@ -486,17 +570,26 @@
 					<div class="settings-card">
 						<div class="setting-row">
 							<div class="setting-info">
-								<h3>Email Address</h3>
-								<p>john.doe@example.com</p>
+								<h3>Name</h3>
+								<p>{user?.name || 'Loading...'}</p>
 							</div>
 							<button class="secondary-btn">Change</button>
 						</div>
 						<div class="setting-row">
 							<div class="setting-info">
-								<h3>Password</h3>
-								<p>Last changed 30 days ago</p>
+								<h3>Email Address</h3>
+								<p>{user?.email || 'Loading...'}</p>
 							</div>
-							<button class="secondary-btn">Update</button>
+							<button class="secondary-btn">Change</button>
+						</div>
+						<div class="setting-row">
+							<div class="setting-info">
+								<h3>Authentication</h3>
+								<p>{user?.provider === 'email' ? 'Email & Password' : user?.provider === 'google' ? 'Google' : user?.provider === 'github' ? 'GitHub' : 'Loading...'}</p>
+							</div>
+							{#if user?.provider === 'email'}
+								<button class="secondary-btn">Update Password</button>
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -820,6 +913,26 @@
 	.user-name {
 		font-weight: 500;
 		color: #374151;
+	}
+
+	.logout-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		background: none;
+		border: 1px solid #e2e8f0;
+		border-radius: 6px;
+		color: #6b7280;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.logout-btn:hover {
+		background: #fef2f2;
+		border-color: #fecaca;
+		color: #dc2626;
 	}
 
 	/* Content Area */

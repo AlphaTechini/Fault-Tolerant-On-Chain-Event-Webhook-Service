@@ -95,8 +95,8 @@ app.post('/webhook', (req, res) => {
 
 	<!-- CTA Section -->
 	<section class="cta-section">
-		<a href="/docs" class="cta-btn primary">VIEW DOCS</a>
-		<a href="/pricing" class="cta-btn secondary">VIEW PRICING</a>
+		<a href="/signup" class="cta-btn primary">GET STARTED</a>
+		<a href="/docs" class="cta-btn secondary">VIEW DOCS</a>
 	</section>
 
 	<!-- Features Section -->
