@@ -60,6 +60,26 @@
 
 	<!-- Main Content -->
 	<main class="content">
+		<!-- Navigation Header -->
+		<nav class="docs-nav-header">
+			<div class="nav-buttons">
+				<button class="nav-btn" onclick={() => window.history.back()} title="Go back">
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M19 12H5"/>
+						<path d="M12 19l-7-7 7-7"/>
+					</svg>
+					<span>Back</span>
+				</button>
+				<a href="/" class="nav-btn home-btn" title="Go to homepage">
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+						<polyline points="9,22 9,12 15,12 15,22"/>
+					</svg>
+					<span>Home</span>
+				</a>
+			</div>
+		</nav>
+
 		<!-- SECTION 1: Introduction -->
 		<section id="introduction" class="doc-section">
 			<div class="section-header">
@@ -879,6 +899,55 @@ function verifySignature(payload, signature, secret) {
 	.faq-item p {
 		margin: 0;
 		color: #4b5563;
+	}
+
+	/* Navigation Header */
+	.docs-nav-header {
+		margin-bottom: 2rem;
+		padding-bottom: 1.5rem;
+		border-bottom: 1px solid #e5e7eb;
+	}
+
+	.nav-buttons {
+		display: flex;
+		gap: 0.75rem;
+	}
+
+	.nav-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 1rem;
+		background: #fff;
+		border: 1px solid #e5e7eb;
+		border-radius: 8px;
+		color: #374151;
+		font-size: 0.9rem;
+		font-weight: 500;
+		cursor: pointer;
+		text-decoration: none;
+		transition: all 0.2s ease;
+	}
+
+	.nav-btn:hover {
+		background: #f3f4f6;
+		border-color: #d1d5db;
+		color: #111;
+	}
+
+	.nav-btn.home-btn {
+		background: linear-gradient(135deg, #00bcd4 0%, #00838f 100%);
+		border-color: transparent;
+		color: #fff;
+	}
+
+	.nav-btn.home-btn:hover {
+		background: linear-gradient(135deg, #26c6da 0%, #00acc1 100%);
+		box-shadow: 0 2px 8px rgba(0, 188, 212, 0.3);
+	}
+
+	.nav-btn svg {
+		flex-shrink: 0;
 	}
 
 	/* Footer */
