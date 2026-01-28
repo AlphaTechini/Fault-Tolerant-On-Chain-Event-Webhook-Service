@@ -1,5 +1,6 @@
 <script lang="ts">
 	let activeSection = $state('introduction');
+	let sidebarOpen = $state(true);
 
 	const sections = [
 		{ id: 'introduction', label: 'Introduction', subsections: [] },
@@ -23,6 +24,10 @@
 			element.scrollIntoView({ behavior: 'smooth', block: 'start' });
 		}
 	}
+
+	function toggleSidebar() {
+		sidebarOpen = !sidebarOpen;
+	}
 </script>
 
 <svelte:head>
@@ -30,11 +35,17 @@
 	<meta name="description" content="Complete documentation for the Contract Webhook API - reliable smart contract event delivery via webhooks." />
 </svelte:head>
 
-<div class="docs-layout">
+<div class="docs-layout" class:sidebar-collapsed={!sidebarOpen}>
 	<!-- Sidebar -->
-	<aside class="sidebar">
+	<aside class="sidebar" class:open={sidebarOpen}>
 		<div class="sidebar-header">
 			<a href="/" class="logo">Contract Webhook API</a>
+			<button class="sidebar-close" onclick={toggleSidebar} title="Close sidebar">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M18 6L6 18"/>
+					<path d="M6 6l12 12"/>
+				</svg>
+			</button>
 		</div>
 		<nav class="sidebar-nav">
 			{#each sections as section}
@@ -58,11 +69,23 @@
 		</nav>
 	</aside>
 
+	<!-- Sidebar Overlay for mobile -->
+	{#if sidebarOpen}
+		<div class="sidebar-overlay" onclick={toggleSidebar}></div>
+	{/if}
+
 	<!-- Main Content -->
 	<main class="content">
-		<!-- Navigation Header -->
+		<!-- Sticky Navigation Header -->
 		<nav class="docs-nav-header">
 			<div class="nav-buttons">
+				<button class="nav-btn menu-btn" onclick={toggleSidebar} title="Toggle sidebar">
+					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 12h18"/>
+						<path d="M3 6h18"/>
+						<path d="M3 18h18"/>
+					</svg>
+				</button>
 				<button class="nav-btn" onclick={() => window.history.back()} title="Go back">
 					<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M19 12H5"/>
@@ -645,11 +668,44 @@ function verifySignature(payload, signature, secret) {
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
+		transform: translateX(0);
+		transition: transform 0.3s ease;
+		z-index: 100;
+	}
+
+	.sidebar:not(.open) {
+		transform: translateX(-100%);
+	}
+
+	.sidebar-collapsed .content {
+		margin-left: 0;
+	}
+
+	.sidebar-overlay {
+		display: none;
 	}
 
 	.sidebar-header {
 		padding: 1.5rem;
 		border-bottom: 1px solid #e5e7eb;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.sidebar-close {
+		background: none;
+		border: none;
+		color: #6b7280;
+		cursor: pointer;
+		padding: 0.25rem;
+		border-radius: 4px;
+		transition: all 0.2s;
+	}
+
+	.sidebar-close:hover {
+		background: #f3f4f6;
+		color: #111;
 	}
 
 	.logo {
@@ -901,11 +957,31 @@ function verifySignature(payload, signature, secret) {
 		color: #4b5563;
 	}
 
-	/* Navigation Header */
+	/* Navigation Header - Sticky */
 	.docs-nav-header {
-		margin-bottom: 2rem;
-		padding-bottom: 1.5rem;
+		position: sticky;
+		top: 0;
+		background: #fafafa;
+		padding: 1rem 0 1.5rem;
+		margin-bottom: 1.5rem;
 		border-bottom: 1px solid #e5e7eb;
+		z-index: 50;
+	}
+
+	.nav-buttons {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.nav-btn.menu-btn {
+		background: #1a1a2e;
+		border-color: #1a1a2e;
+		color: #fff;
+	}
+
+	.nav-btn.menu-btn:hover {
+		background: #2d2d44;
 	}
 
 	.nav-buttons {
