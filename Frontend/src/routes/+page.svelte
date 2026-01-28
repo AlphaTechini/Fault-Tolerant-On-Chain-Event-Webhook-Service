@@ -3,6 +3,24 @@
 </script>
 
 <div class="landing">
+	<!-- Navbar -->
+	<header class="navbar">
+		<nav class="nav-container">
+			<a href="/" class="nav-logo">Contract Webhook API</a>
+			<div class="nav-links">
+				<a href="/docs">Docs</a>
+				<a href="/pricing">Pricing</a>
+				<a href="/dashboard" class="nav-cta">Dashboard</a>
+				<a href="/contact">Contact</a>
+			</div>
+			<button class="mobile-menu-btn" aria-label="Toggle menu">
+				<span></span>
+				<span></span>
+				<span></span>
+			</button>
+		</nav>
+	</header>
+
 	<!-- Hero Section -->
 	<section class="hero">
 		<div class="hero-overlay"></div>
@@ -289,10 +307,89 @@ app.post('/webhook', (req, res) => {
 		color: #333;
 	}
 
+	/* Navbar */
+	.navbar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		background: rgba(255, 255, 255, 0.95);
+		backdrop-filter: blur(10px);
+		border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+		z-index: 1000;
+	}
+
+	.nav-container {
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 1rem 2rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.nav-logo {
+		font-weight: 700;
+		font-size: 1.25rem;
+		color: #111;
+		text-decoration: none;
+	}
+
+	.nav-links {
+		display: flex;
+		gap: 2rem;
+		align-items: center;
+	}
+
+	.nav-links a {
+		color: #555;
+		text-decoration: none;
+		font-weight: 500;
+		font-size: 0.95rem;
+		transition: color 0.2s;
+	}
+
+	.nav-links a:hover {
+		color: #00bcd4;
+	}
+
+	.nav-links .nav-cta {
+		background: #00bcd4;
+		color: white;
+		padding: 0.5rem 1.25rem;
+		border-radius: 6px;
+		transition: background 0.2s, transform 0.2s;
+	}
+
+	.nav-links .nav-cta:hover {
+		background: #00acc1;
+		color: white;
+		transform: translateY(-1px);
+	}
+
+	.mobile-menu-btn {
+		display: none;
+		flex-direction: column;
+		gap: 5px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 4px;
+	}
+
+	.mobile-menu-btn span {
+		display: block;
+		width: 24px;
+		height: 2px;
+		background: #333;
+		transition: all 0.3s;
+	}
+
 	/* Hero Section */
 	.hero {
 		position: relative;
 		min-height: 70vh;
+		padding-top: 60px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -868,6 +965,14 @@ app.post('/webhook', (req, res) => {
 
 		.testimonial-author {
 			margin: 0 auto;
+		}
+
+		.nav-links {
+			display: none;
+		}
+
+		.mobile-menu-btn {
+			display: flex;
 		}
 
 		.flow-steps {
