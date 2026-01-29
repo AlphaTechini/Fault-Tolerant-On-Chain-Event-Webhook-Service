@@ -21,6 +21,9 @@ const envSchema = z.object({
 
     // Frontend URL for redirects
     FRONTEND_URL: z.string().default('http://localhost:5173'),
+
+    // Resend API (for email notifications)
+    RESEND_API_KEY: z.string().optional(),
 });
 
 const _env = envSchema.safeParse(process.env);

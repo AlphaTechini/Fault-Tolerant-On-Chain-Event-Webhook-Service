@@ -190,7 +190,7 @@
 			</div>
 
 			<div class="content-block">
-				<h2>Step 2: Create a subscription</h2>
+				<h2>Step 2: Create a subscription with webhook</h2>
 				<div class="step-content">
 					<div class="code-example">
 						<div class="code-header">POST /api/subscriptions</div>
@@ -198,7 +198,9 @@
   "chainId": 1,
   "contractAddress": "0x1234...abcd",
   "abi": [...],
-  "eventFilters": ["Transfer", "Approval"]  // Optional
+  "eventFilters": ["Transfer", "Approval"],  // Optional
+  "webhookUrl": "https://yourapp.com/webhook",
+  "enableSignature": true  // Optional, enabled by default
 }`}</code></pre>
 					</div>
 					<ul class="param-list">
@@ -206,30 +208,16 @@
 						<li><strong>contractAddress</strong> — The smart contract to monitor</li>
 						<li><strong>abi</strong> — Contract ABI (full or event-only)</li>
 						<li><strong>eventFilters</strong> — Optional. Specific event names to capture</li>
+						<li><strong>webhookUrl</strong> — Your HTTPS endpoint that will receive events</li>
 					</ul>
+					<p>The response will contain your subscription ID and a signing secret (if enabled). <strong>Save this secret!</strong> It won't be shown again.</p>
 				</div>
 			</div>
 
-			<div class="content-block">
-				<h2>Step 3: Register a webhook</h2>
-				<div class="step-content">
-					<div class="code-example">
-						<div class="code-header">POST /api/webhooks</div>
-						<pre><code>{`{
-  "subscriptionId": "sub_abc123",
-  "url": "https://yourapp.com/webhook",
-  "secret": "whsec_optional_signing_secret"  // Optional
-}`}</code></pre>
-					</div>
-					<ul class="param-list">
-						<li><strong>url</strong> — Your HTTPS endpoint that will receive events</li>
-						<li><strong>secret</strong> — Optional signing secret for payload verification</li>
-					</ul>
-				</div>
-			</div>
+			<!-- Step 3 removed, combined into Step 2 -->
 
 			<div class="content-block">
-				<h2>Step 4: Receive events</h2>
+				<h2>Step 3: Receive events</h2>
 				<div class="step-content">
 					<p>Your webhook will receive POST requests with this payload:</p>
 					<div class="code-example">
@@ -298,6 +286,7 @@
 						<tr><td><code>chainId</code></td><td>number</td><td>Network ID (1=Ethereum, 137=Polygon, etc.)</td></tr>
 						<tr><td><code>contractAddress</code></td><td>string</td><td>Contract address to monitor</td></tr>
 						<tr><td><code>abi</code></td><td>array</td><td>Contract ABI for event decoding</td></tr>
+						<tr><td><code>webhookUrl</code></td><td>string</td><td>HTTPS endpoint to receive events</td></tr>
 					</tbody>
 				</table>
 
@@ -471,6 +460,7 @@ function verifySignature(payload, signature, secret) {
 					<li><strong>Time range</strong> — Specify start and end timestamps for the replay window</li>
 					<li><strong>Subscription scope</strong> — Replays are scoped to a single subscription</li>
 				</ul>
+				<p>All failed or delivered events within the window will be reset to <code>PENDING</code> status and redelivered.</p>
 			</div>
 
 			<div class="content-block">

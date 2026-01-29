@@ -1,5 +1,18 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+// --- Plan Tiers ---
+export enum PlanTier {
+    FREE = 'free',
+    PRO = 'pro',
+    ENTERPRISE = 'enterprise',
+}
+
+export const PLAN_LIMITS = {
+    [PlanTier.FREE]: { eventsPerMonth: 10000, subscriptions: 3 },
+    [PlanTier.PRO]: { eventsPerMonth: 100000, subscriptions: 20 },
+    [PlanTier.ENTERPRISE]: { eventsPerMonth: 1000000, subscriptions: 100 },
+};
+
 // --- Subscription ---
 export interface ISubscription extends Document {
     userId: mongoose.Types.ObjectId;
@@ -7,7 +20,8 @@ export interface ISubscription extends Document {
     contractAddress: string;
     abi: any[];
     webhookUrl: string;
-    eventFilters?: string[]; // Optional: specific events to listen for
+    webhookSecret?: string; // HMAC signing secret
+    eventFilters?: string[];
     lastProcessedBlock: number;
     status: 'active' | 'paused';
     createdAt: Date;
@@ -19,12 +33,12 @@ const SubscriptionSchema: Schema = new Schema({
     contractAddress: { type: String, required: true },
     abi: { type: Array, required: true },
     webhookUrl: { type: String, required: true },
+    webhookSecret: { type: String }, // Optional signing secret
     eventFilters: { type: [String], default: [] },
     lastProcessedBlock: { type: Number, default: 0 },
     status: { type: String, enum: ['active', 'paused'], default: 'active' },
 }, { timestamps: true });
 
-// Index for user lookups
 SubscriptionSchema.index({ userId: 1 });
 
 export const Subscription = mongoose.model<ISubscription>('Subscription', SubscriptionSchema);
@@ -34,7 +48,7 @@ export enum EventStatus {
     PENDING = 'PENDING',
     PROCESSING = 'PROCESSING',
     DELIVERED = 'DELIVERED',
-    FAILED = 'FAILED', // Max retries exceeded
+    FAILED = 'FAILED',
 }
 
 export interface IEventLog extends Document {
@@ -42,7 +56,7 @@ export interface IEventLog extends Document {
     blockNumber: number;
     transactionHash: string;
     eventName: string;
-    payload: any; // Decoded args
+    payload: any;
     status: EventStatus;
     nextRetryAt: Date;
     retryCount: number;
@@ -60,8 +74,8 @@ const EventLogSchema: Schema = new Schema({
     retryCount: { type: Number, default: 0 },
 }, { timestamps: true });
 
-// Index for polling/processing
 EventLogSchema.index({ status: 1, nextRetryAt: 1 });
+EventLogSchema.index({ subscriptionId: 1, createdAt: -1 });
 
 export const EventLog = mongoose.model<IEventLog>('EventLog', EventLogSchema);
 
@@ -69,7 +83,7 @@ export const EventLog = mongoose.model<IEventLog>('EventLog', EventLogSchema);
 export interface IDeliveryAttempt extends Document {
     eventLogId: mongoose.Types.ObjectId;
     responseStatus?: number;
-    responseBody?: string; // maybe truncate if too long
+    responseBody?: string;
     success: boolean;
     error?: string;
     timestamp: Date;
@@ -95,22 +109,35 @@ export enum AuthProvider {
 
 export interface IUser extends Document {
     email: string;
-    passwordHash?: string; // Optional for OAuth users
+    passwordHash?: string;
     name: string;
     provider: AuthProvider;
-    providerId?: string; // OAuth provider's user ID
+    providerId?: string;
+    // Plan & Usage
+    plan: PlanTier;
+    eventsThisMonth: number;
+    lastUsageReset: Date;
+    // Notifications
+    emailNotifications: boolean;
+    lastFailureNotification?: Date;
     createdAt: Date;
 }
 
 const UserSchema: Schema = new Schema({
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String }, // Only required for email provider
+    passwordHash: { type: String },
     name: { type: String, required: true, trim: true },
     provider: { type: String, enum: Object.values(AuthProvider), default: AuthProvider.EMAIL },
-    providerId: { type: String }, // For OAuth providers
+    providerId: { type: String },
+    // Plan & Usage
+    plan: { type: String, enum: Object.values(PlanTier), default: PlanTier.FREE },
+    eventsThisMonth: { type: Number, default: 0 },
+    lastUsageReset: { type: Date, default: Date.now },
+    // Notifications
+    emailNotifications: { type: Boolean, default: true },
+    lastFailureNotification: { type: Date },
 }, { timestamps: true });
 
-// Compound index for OAuth lookups
 UserSchema.index({ provider: 1, providerId: 1 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);
@@ -119,8 +146,8 @@ export const User = mongoose.model<IUser>('User', UserSchema);
 export interface IApiKey extends Document {
     userId: mongoose.Types.ObjectId;
     name: string;
-    keyHash: string; // Hashed key (we never store raw keys)
-    prefix: string; // First 8 chars for identification (e.g., sk_live_abc...)
+    keyHash: string;
+    prefix: string;
     lastUsedAt?: Date;
     createdAt: Date;
 }

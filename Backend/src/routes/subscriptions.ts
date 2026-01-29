@@ -1,7 +1,13 @@
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { Subscription, EventLog, DeliveryAttempt } from '../models';
+import crypto from 'crypto';
+import { Subscription, EventLog, DeliveryAttempt, User, PLAN_LIMITS, PlanTier } from '../models';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
+
+// Generate a webhook secret
+const generateWebhookSecret = (): string => {
+    return `whsec_${crypto.randomBytes(24).toString('base64url')}`;
+};
 
 const subscriptionRoutes: FastifyPluginAsyncZod = async (app) => {
 
@@ -17,6 +23,7 @@ const subscriptionRoutes: FastifyPluginAsyncZod = async (app) => {
                 abi: z.array(z.any()),
                 webhookUrl: z.string().url(),
                 eventFilters: z.array(z.string()).optional(),
+                enableSignature: z.boolean().optional().default(true),
             }),
             response: {
                 201: z.object({
@@ -24,13 +31,31 @@ const subscriptionRoutes: FastifyPluginAsyncZod = async (app) => {
                     chainId: z.number(),
                     contractAddress: z.string(),
                     webhookUrl: z.string(),
+                    webhookSecret: z.string().nullable(),
                     status: z.string(),
                 }),
             },
         },
     }, async (request, reply) => {
-        const { chainId, contractAddress, abi, webhookUrl, eventFilters } = request.body;
+        const { chainId, contractAddress, abi, webhookUrl, eventFilters, enableSignature } = request.body;
         const userId = (request as AuthenticatedRequest).user.id;
+
+        // Check plan limit for subscriptions
+        const user = await User.findById(userId);
+        if (!user) {
+            return reply.status(404).send({ error: 'User not found' });
+        }
+
+        const subscriptionLimit = PLAN_LIMITS[user.plan as PlanTier].subscriptions;
+        const currentCount = await Subscription.countDocuments({ userId });
+        if (currentCount >= subscriptionLimit) {
+            return reply.status(403).send({
+                error: `Plan limit reached. ${user.plan} plan allows ${subscriptionLimit} subscriptions.`
+            });
+        }
+
+        // Generate webhook secret if signature is enabled
+        const webhookSecret = enableSignature ? generateWebhookSecret() : undefined;
 
         const sub = await Subscription.create({
             userId,
@@ -38,14 +63,17 @@ const subscriptionRoutes: FastifyPluginAsyncZod = async (app) => {
             contractAddress,
             abi,
             webhookUrl,
+            webhookSecret,
             eventFilters: eventFilters || [],
         });
 
+        // Return secret ONLY on creation (user must save it)
         return reply.status(201).send({
             _id: sub.id,
             chainId: sub.chainId,
             contractAddress: sub.contractAddress,
             webhookUrl: sub.webhookUrl,
+            webhookSecret: webhookSecret || null,
             status: sub.status,
         });
     });

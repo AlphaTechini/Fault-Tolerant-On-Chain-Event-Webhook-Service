@@ -13,6 +13,7 @@
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/oauth2": "^8.1.2",
+    "@fastify/rate-limit": "^10.3.0",
     "argon2": "^0.44.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
@@ -20,6 +21,7 @@
     "fastify-type-provider-zod": "^6.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.5",
+    "resend": "^6.9.1",
     "viem": "^2.45.0",
     "zod": "^4.3.6"
   },

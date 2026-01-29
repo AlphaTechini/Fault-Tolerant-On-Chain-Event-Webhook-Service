@@ -98,12 +98,9 @@ const processSubscription = async (sub: ISubscription) => {
                     subscriptionId: sub._id,
                     blockNumber: Number(log.blockNumber),
                     transactionHash: log.transactionHash,
+                    logIndex: Number(log.logIndex),
                     eventName: decoded.eventName,
-                    payload: {
-                        args: decoded.args,
-                        logIndex: log.logIndex,
-                        blockHash: log.blockHash,
-                    },
+                    payload: decoded.args, // Just the args, as we have top-level fields for others
                     status: 'PENDING',
                 });
 
@@ -117,14 +114,13 @@ const processSubscription = async (sub: ISubscription) => {
                     subscriptionId: sub._id,
                     blockNumber: Number(log.blockNumber),
                     transactionHash: log.transactionHash,
+                    logIndex: Number(log.logIndex), // Still capture index
                     eventName: 'UnknownEvent',
                     payload: {
                         raw: {
                             data: log.data,
                             topics: log.topics,
                         },
-                        logIndex: log.logIndex,
-                        blockHash: log.blockHash,
                         decodeError: decodeErr.message,
                     },
                     status: 'PENDING',
