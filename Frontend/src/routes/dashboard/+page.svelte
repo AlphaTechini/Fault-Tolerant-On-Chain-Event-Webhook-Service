@@ -470,7 +470,6 @@
 							{/each}
 						</tbody>
 					</table>
-				</div>
 			{/if}
 
 
@@ -708,7 +707,7 @@
 						</div>
 						<div class="form-group">
 							<label for="abi">Contract ABI (JSON)</label>
-							<textarea id="abi" placeholder='[{"type":"event","name":"Transfer"...}]' rows="5" bind:value={newSubAbi}></textarea>
+							<textarea id="abi" placeholder='[&#123;"type":"event","name":"Transfer"...&#125;]' rows="5" bind:value={newSubAbi}></textarea>
 						</div>
 						<div class="form-group">
 							<label for="filters">Event Filters (Optional)</label>
