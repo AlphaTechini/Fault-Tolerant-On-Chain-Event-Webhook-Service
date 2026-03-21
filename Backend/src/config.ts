@@ -27,6 +27,10 @@ const envSchema = z.object({
 
     // Redis
     REDIS_URL: z.string().default('redis://localhost:6379'),
+
+    // RPC Configuration (JSON string mapping chainId to array of fallback URLs)
+    // E.g., '{"1":["https://mainnet.infura...","https://eth-mainnet.alchemy..."]}'
+    RPC_URLS_JSON: z.string().optional().default('{}'),
 });
 
 const _env = envSchema.safeParse(process.env);
@@ -36,4 +40,14 @@ if (!_env.success) {
     process.exit(1);
 }
 
-export const env = _env.data;
+export const env = {
+    ..._env.data,
+    RPC_URLS: (() => {
+        try {
+            return JSON.parse(_env.data.RPC_URLS_JSON) as Record<number, string[]>;
+        } catch (err) {
+            console.error("❌ Failed to parse RPC_URLS_JSON. Ensure it is valid JSON.");
+            return {} as Record<number, string[]>;
+        }
+    })(),
+};

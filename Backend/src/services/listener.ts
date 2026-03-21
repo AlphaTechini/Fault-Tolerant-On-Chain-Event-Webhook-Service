@@ -1,4 +1,4 @@
-import { createPublicClient, http, decodeEventLog, Abi } from 'viem';
+import { createPublicClient, http, fallback, decodeEventLog, Abi } from 'viem';
 import { mainnet, sepolia, bsc, bscTestnet, polygon, polygonAmoy, arbitrum, optimism } from 'viem/chains';
 import { Subscription, EventLog, ISubscription } from '../models';
 import { env } from '../config';
@@ -24,9 +24,21 @@ const getClient = (chainId: number) => {
         const chain = CHAINS[chainId];
         if (!chain) throw new Error(`Chain ${chainId} not supported`);
 
+        const customRpcs = env.RPC_URLS[chainId];
+        let transport;
+
+        if (customRpcs && customRpcs.length > 0) {
+            // Create a prioritized fallback list of RPC providers
+            const transports = customRpcs.map(url => http(url));
+            transport = fallback(transports, { rank: true, retryCount: 3 });
+        } else {
+            // Default viem public transport if no fallback configuration is found
+            transport = http(); 
+        }
+
         clients[chainId] = createPublicClient({
             chain,
-            transport: http(), // Use env RPC URLs in production
+            transport,
         });
     }
     return clients[chainId];
