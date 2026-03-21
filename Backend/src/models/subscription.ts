@@ -5,8 +5,8 @@ export interface ISubscription extends Document {
   chainId: number;
   contractAddress: string;
   abi: any[];
-  webhook: string;
-  webhookSecrets?: string;
+  webhookUrl: string;
+  webhookSecret?: string;
   eventFilters?: string[];
   lastProcessedBlock: number;
   status: 'active' | 'paused';

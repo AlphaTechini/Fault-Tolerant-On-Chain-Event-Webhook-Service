@@ -11,6 +11,7 @@ export interface IEventLog extends Document {
     subscriptionId: mongoose.Types.ObjectId;
     blockNumber: number;
     transactionHash: string;
+    logIndex: number;
     eventName: string;
     payload: any;
     status: EventStatus;
@@ -23,6 +24,7 @@ const EventLogSchema: Schema = new Schema({
     subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription', required: true },
     blockNumber: { type: Number, required: true },
     transactionHash: { type: String, required: true },
+    logIndex: { type: Number, required: true },
     eventName: { type: String, required: true },
     payload: { type: mongoose.Schema.Types.Mixed, required: true },
     status: { type: String, enum: Object.values(EventStatus), default: EventStatus.PENDING },

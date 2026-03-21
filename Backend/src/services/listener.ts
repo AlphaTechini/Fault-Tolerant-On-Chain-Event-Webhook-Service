@@ -17,7 +17,7 @@ const CHAINS: Record<number, any> = {
 };
 
 // Client cache
-const clients: Record<number, ReturnType<typeof createPublicClient>> = {};
+const clients: Record<number, any> = {};
 
 const getClient = (chainId: number) => {
     if (!clients[chainId]) {
