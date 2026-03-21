@@ -1,8 +1,9 @@
 import crypto from 'crypto';
 import { Job } from 'bullmq';
-import { EventLog, DeliveryAttempt, Subscription, EventStatus, User, PLAN_LIMITS, PlanTier } from '../models';
+import { EventLog, DeliveryAttempt, Subscription, EventStatus, User, PLAN_LIMITS, PlanTier, DeadLetterEvent } from '../models';
 import { sendFailureNotification } from './email';
 import { startDeliveryWorker } from './queue';
+import { getCircuitBreaker } from './circuitBreaker';
 
 export const startDeliveryService = async () => {
     console.log("🚀 Starting Delivery Service (BullMQ)...");
@@ -102,23 +103,23 @@ const processJob = async (job: Job) => {
             headers['X-Webhook-Signature'] = signPayload(payload, subscription.webhookSecret);
         }
 
-        const response = await fetch(subscription.webhookUrl, {
-            method: 'POST',
-            headers,
-            body: payload,
-            signal: AbortSignal.timeout(30000), // 30s timeout
-        });
+        const breaker = getCircuitBreaker(subscription._id.toString());
+        
+        // Fire request through Circuit Breaker
+        const responseData: any = await breaker.fire(subscription.webhookUrl, payload, headers);
 
-        responseStatus = response.status;
-        responseBody = await response.text();
+        responseStatus = responseData.status;
+        responseBody = responseData.body;
+        success = true; // since it didn't throw, it was a 2xx success
 
-        if (response.ok) {
-            success = true;
-        } else {
-            errorMsg = `HTTP ${responseStatus}`;
-        }
     } catch (err: any) {
-        errorMsg = err.message;
+        if (err.name === 'OpenCircuitError') {
+            errorMsg = 'Circuit Breaker Open - Webhook delivery skipped';
+        } else {
+            errorMsg = err.message || 'Unknown error';
+            responseStatus = err.responseStatus || 0;
+            responseBody = err.responseBody || '';
+        }
     }
 
     // Record Attempt
@@ -144,8 +145,24 @@ const processJob = async (job: Job) => {
         // Check if this is the last attempt (job.opts.attempts default is 5)
         const maxAttempts = job.opts.attempts || 5;
         if (job.attemptsMade >= maxAttempts - 1) {
-            event.status = EventStatus.FAILED;
-            console.log(`❌ Event ${event._id} failed permanently after ${maxAttempts} attempts`);
+            console.log(`❌ Event ${event._id} failed permanently after ${maxAttempts} attempts. Moving to DLQ.`);
+
+            // --- Hybrid DLQ Architecture ---
+            // Move poisoned event out of EventLog into DeadLetterEvent to keep EventLog lean
+            // BullMQ will remove the job from Redis because `removeOnFail: true` is set in queue.ts
+            await DeadLetterEvent.create({
+                subscriptionId: event.subscriptionId,
+                blockNumber: event.blockNumber,
+                transactionHash: event.transactionHash,
+                logIndex: event.logIndex,
+                eventName: event.eventName,
+                payload: event.payload,
+                status: EventStatus.FAILED,
+                retryCount: event.retryCount,
+                failedAt: new Date(),
+                lastError: errorMsg || 'Exhausted all retries'
+            });
+            await EventLog.findByIdAndDelete(event._id);
 
             // Send failure notification if enabled and not sent recently
             if (user.emailNotifications) {
@@ -162,9 +179,9 @@ const processJob = async (job: Job) => {
             }
         } else {
             event.status = EventStatus.FAILED; // Kept as failed so queries show it's failing
+            await event.save();
         }
 
-        await event.save();
         throw new Error(errorMsg || 'Delivery failed'); // Throwing triggers BullMQ retry/backoff
     }
 };

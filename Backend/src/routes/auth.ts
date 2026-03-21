@@ -29,7 +29,7 @@ function generateToken(userId: string, email: string): string {
 
 export default async function authRoutes(app: FastifyInstance) {
     // Register Google OAuth
-    await app.register(oauthPlugin, {
+    await app.register(oauthPlugin as any, {
         name: 'googleOAuth2',
         scope: ['profile', 'email'],
         credentials: {
@@ -46,7 +46,7 @@ export default async function authRoutes(app: FastifyInstance) {
     });
 
     // Register GitHub OAuth
-    await app.register(oauthPlugin, {
+    await app.register(oauthPlugin as any, {
         name: 'githubOAuth2',
         scope: ['user:email', 'read:user'],
         credentials: {

@@ -36,3 +36,25 @@ EventLogSchema.index({ status: 1, nextRetryAt: 1 });
 EventLogSchema.index({ subscriptionId: 1, createdAt: -1 });
 
 export const EventLog = mongoose.model<IEventLog>('EventLog', EventLogSchema);
+
+export interface IDeadLetterEvent extends IEventLog {
+    failedAt: Date;
+    lastError: string;
+}
+
+const DeadLetterEventSchema: Schema = new Schema({
+    subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription', required: true },
+    blockNumber: { type: Number, required: true },
+    transactionHash: { type: String, required: true },
+    logIndex: { type: Number, required: true },
+    eventName: { type: String, required: true },
+    payload: { type: mongoose.Schema.Types.Mixed, required: true },
+    status: { type: String, default: EventStatus.FAILED },
+    retryCount: { type: Number, required: true },
+    failedAt: { type: Date, default: Date.now },
+    lastError: { type: String, required: true },
+}, { timestamps: true });
+
+DeadLetterEventSchema.index({ subscriptionId: 1, failedAt: -1 });
+
+export const DeadLetterEvent = mongoose.model<IDeadLetterEvent>('DeadLetterEvent', DeadLetterEventSchema);

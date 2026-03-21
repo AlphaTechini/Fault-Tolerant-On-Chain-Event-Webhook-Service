@@ -4,6 +4,8 @@ exports.startEventListener = void 0;
 const viem_1 = require("viem");
 const chains_1 = require("viem/chains");
 const models_1 = require("../models");
+const config_1 = require("../config");
+const queue_1 = require("./queue");
 // Map chainId to Viem Chain object
 const CHAINS = {
     1: chains_1.mainnet,
@@ -22,9 +24,20 @@ const getClient = (chainId) => {
         const chain = CHAINS[chainId];
         if (!chain)
             throw new Error(`Chain ${chainId} not supported`);
+        const customRpcs = config_1.env.RPC_URLS[chainId];
+        let transport;
+        if (customRpcs && customRpcs.length > 0) {
+            // Create a prioritized fallback list of RPC providers
+            const transports = customRpcs.map(url => (0, viem_1.http)(url));
+            transport = (0, viem_1.fallback)(transports, { rank: true, retryCount: 3 });
+        }
+        else {
+            // Default viem public transport if no fallback configuration is found
+            transport = (0, viem_1.http)();
+        }
         clients[chainId] = (0, viem_1.createPublicClient)({
             chain,
-            transport: (0, viem_1.http)(), // Use env RPC URLs in production
+            transport,
         });
     }
     return clients[chainId];
@@ -85,7 +98,7 @@ const processSubscription = async (sub) => {
                     topics: log.topics,
                 });
                 // Create EventLog with decoded data
-                await models_1.EventLog.create({
+                const eventLog = await models_1.EventLog.create({
                     subscriptionId: sub._id,
                     blockNumber: Number(log.blockNumber),
                     transactionHash: log.transactionHash,
@@ -94,12 +107,14 @@ const processSubscription = async (sub) => {
                     payload: decoded.args, // Just the args, as we have top-level fields for others
                     status: 'PENDING',
                 });
+                // Enqueue to BullMQ
+                await queue_1.deliveryQueue.add('deliver', { eventId: eventLog._id.toString() });
                 console.log(`📝 Captured event: ${decoded.eventName} at block ${log.blockNumber}`);
             }
             catch (decodeErr) {
                 // If decoding fails, save raw log data
                 console.warn(`Failed to decode log: ${decodeErr.message}`);
-                await models_1.EventLog.create({
+                const eventLog = await models_1.EventLog.create({
                     subscriptionId: sub._id,
                     blockNumber: Number(log.blockNumber),
                     transactionHash: log.transactionHash,
@@ -114,6 +129,8 @@ const processSubscription = async (sub) => {
                     },
                     status: 'PENDING',
                 });
+                // Enqueue to BullMQ even if decode failed (user might want raw)
+                await queue_1.deliveryQueue.add('deliver', { eventId: eventLog._id.toString() });
             }
         }
     }

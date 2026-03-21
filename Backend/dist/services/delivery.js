@@ -7,20 +7,14 @@ exports.startDeliveryService = void 0;
 const crypto_1 = __importDefault(require("crypto"));
 const models_1 = require("../models");
 const email_1 = require("./email");
-// Retry delays: 1min, 5min, 30min, 2hr, 12hr (as documented)
-const RETRY_DELAYS = [60000, 300000, 1800000, 7200000, 43200000];
+const queue_1 = require("./queue");
+const circuitBreaker_1 = require("./circuitBreaker");
 const startDeliveryService = async () => {
-    console.log("🚀 Starting Delivery Service...");
+    console.log("🚀 Starting Delivery Service (BullMQ)...");
     // Reset monthly usage at start of each month
     setInterval(resetMonthlyUsage, 3600000); // Check hourly
-    setInterval(async () => {
-        try {
-            await processDeliveryQueue();
-        }
-        catch (err) {
-            console.error("Error in delivery message loop:", err);
-        }
-    }, 5000);
+    // Register BullMQ Worker
+    (0, queue_1.startDeliveryWorker)(processJob);
 };
 exports.startDeliveryService = startDeliveryService;
 // Reset usage for all users at start of month
@@ -33,18 +27,13 @@ const resetMonthlyUsage = async () => {
 const signPayload = (payload, secret) => {
     return crypto_1.default.createHmac('sha256', secret).update(payload).digest('hex');
 };
-const processDeliveryQueue = async () => {
-    const now = new Date();
-    const eventsToProcess = await models_1.EventLog.find({
-        status: { $in: [models_1.EventStatus.PENDING, models_1.EventStatus.FAILED] },
-        nextRetryAt: { $lte: now },
-        retryCount: { $lt: 5 },
-    }).limit(50);
-    for (const event of eventsToProcess) {
-        await processEvent(event);
+const processJob = async (job) => {
+    const { eventId } = job.data;
+    const event = await models_1.EventLog.findById(eventId);
+    if (!event) {
+        console.warn(`Event ${eventId} not found for job ${job.id}`);
+        return; // Don't throw, drop the job
     }
-};
-const processEvent = async (event) => {
     event.status = models_1.EventStatus.PROCESSING;
     await event.save();
     const subscription = await models_1.Subscription.findById(event.subscriptionId);
@@ -66,11 +55,14 @@ const processEvent = async (event) => {
     const planLimit = models_1.PLAN_LIMITS[user.plan].eventsPerMonth;
     if (user.eventsThisMonth >= planLimit) {
         console.warn(`User ${user._id} has exceeded plan limit (${user.eventsThisMonth}/${planLimit})`);
-        // Don't fail the event, just pause processing - keep it pending
+        // We throw a specific error so BullMQ retries, but wait, if plan limit exceeded it will continuously fail.
+        // The original logic just kept it PENDING for 1 hour.
+        // We will throw an error to trigger BullMQ retry, but this uses up attempts.
+        // To retain endless retries until month reset, we could raise a special error or just re-queue. 
+        // For now, matching standard behaviour: throw error so BullMQ backs off.
         event.status = models_1.EventStatus.PENDING;
-        event.nextRetryAt = new Date(Date.now() + 3600000); // Retry in 1 hour
         await event.save();
-        return;
+        throw new Error(`Plan limit exceeded: ${user.eventsThisMonth}/${planLimit}`);
     }
     let success = false;
     let responseStatus = 0;
@@ -79,14 +71,14 @@ const processEvent = async (event) => {
     try {
         const payload = JSON.stringify({
             id: event._id,
-            subscriptionId: subscription._id, // Added based on Readme
+            subscriptionId: subscription._id,
             chainId: subscription.chainId,
             contractAddress: subscription.contractAddress,
             blockNumber: event.blockNumber,
             transactionHash: event.transactionHash,
-            logIndex: event.logIndex, // Added based on Readme
+            logIndex: event.logIndex,
             eventName: event.eventName,
-            args: event.payload, // Renamed from payload to args
+            args: event.payload,
             timestamp: new Date().toISOString(),
         });
         // Build headers
@@ -97,23 +89,22 @@ const processEvent = async (event) => {
         if (subscription.webhookSecret) {
             headers['X-Webhook-Signature'] = signPayload(payload, subscription.webhookSecret);
         }
-        const response = await fetch(subscription.webhookUrl, {
-            method: 'POST',
-            headers,
-            body: payload,
-            signal: AbortSignal.timeout(30000), // 30s timeout as documented
-        });
-        responseStatus = response.status;
-        responseBody = await response.text();
-        if (response.ok) {
-            success = true;
-        }
-        else {
-            errorMsg = `HTTP ${responseStatus}`;
-        }
+        const breaker = (0, circuitBreaker_1.getCircuitBreaker)(subscription._id.toString());
+        // Fire request through Circuit Breaker
+        const responseData = await breaker.fire(subscription.webhookUrl, payload, headers);
+        responseStatus = responseData.status;
+        responseBody = responseData.body;
+        success = true; // since it didn't throw, it was a 2xx success
     }
     catch (err) {
-        errorMsg = err.message;
+        if (err.name === 'OpenCircuitError') {
+            errorMsg = 'Circuit Breaker Open - Webhook delivery skipped';
+        }
+        else {
+            errorMsg = err.message || 'Unknown error';
+            responseStatus = err.responseStatus || 0;
+            responseBody = err.responseBody || '';
+        }
     }
     // Record Attempt
     await models_1.DeliveryAttempt.create({
@@ -132,9 +123,26 @@ const processEvent = async (event) => {
     }
     else {
         event.retryCount += 1;
-        if (event.retryCount >= 5) {
-            event.status = models_1.EventStatus.FAILED;
-            console.log(`❌ Event ${event._id} failed permanently after 5 attempts`);
+        // Check if this is the last attempt (job.opts.attempts default is 5)
+        const maxAttempts = job.opts.attempts || 5;
+        if (job.attemptsMade >= maxAttempts - 1) {
+            console.log(`❌ Event ${event._id} failed permanently after ${maxAttempts} attempts. Moving to DLQ.`);
+            // --- Hybrid DLQ Architecture ---
+            // Move poisoned event out of EventLog into DeadLetterEvent to keep EventLog lean
+            // BullMQ will remove the job from Redis because `removeOnFail: true` is set in queue.ts
+            await models_1.DeadLetterEvent.create({
+                subscriptionId: event.subscriptionId,
+                blockNumber: event.blockNumber,
+                transactionHash: event.transactionHash,
+                logIndex: event.logIndex,
+                eventName: event.eventName,
+                payload: event.payload,
+                status: models_1.EventStatus.FAILED,
+                retryCount: event.retryCount,
+                failedAt: new Date(),
+                lastError: errorMsg || 'Exhausted all retries'
+            });
+            await models_1.EventLog.findByIdAndDelete(event._id);
             // Send failure notification if enabled and not sent recently
             if (user.emailNotifications) {
                 const lastNotif = user.lastFailureNotification;
@@ -149,12 +157,9 @@ const processEvent = async (event) => {
             }
         }
         else {
-            event.status = models_1.EventStatus.FAILED;
-            // Use documented retry delays
-            const delay = RETRY_DELAYS[event.retryCount - 1] || RETRY_DELAYS[4];
-            event.nextRetryAt = new Date(Date.now() + delay);
+            event.status = models_1.EventStatus.FAILED; // Kept as failed so queries show it's failing
+            await event.save();
         }
-        await event.save();
-        console.warn(`⚠️ Event ${event._id} failed delivery. Retry ${event.retryCount}/5`);
+        throw new Error(errorMsg || 'Delivery failed'); // Throwing triggers BullMQ retry/backoff
     }
 };

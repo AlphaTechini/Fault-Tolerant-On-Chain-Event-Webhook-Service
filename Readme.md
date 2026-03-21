@@ -720,6 +720,16 @@ sequenceDiagram
 **Rationale**: Prevents thundering herd, respects downstream capacity
 **Consequences**: Increased delivery latency for failing endpoints
 
+### ADR-004: Dead Letter Queue (DLQ) Strategy
+**Decision**: Use a Hybrid approach: BullMQ's native retries for transient failures, and a MongoDB `DeadLetterEvent` collection for permanent failures.
+**Rationale**: Keeps standard event queue (Redis) clean and memory-efficient by offloading permanently failed ("poisoned") events to persistent, cheap disk storage (MongoDB) for later inspection or manual replay.
+**Consequences**: Requires explicit code in the queue worker to detect max-retries and insert records into MongoDB before BullMQ deletes them via `removeOnFail: true`.
+
+### ADR-005: Webhook Circuit Breaker Implementation
+**Decision**: Utilize `opossum` for an in-memory Circuit Breaker pattern.
+**Rationale**: Prevents cascading failures and stops hammering webhook endpoints that are known to be down for extended periods, preserving internal worker threads and outbound bandwidth.
+**Consequences**: Currently implemented as an **in-memory** construct. If horizontally scaled across multiple Node.js instances, circuit state is not shared. For a multi-node cluster, a Redis-backed Circuit Breaker would be required.
+
 ## Getting Started
 
 ### Prerequisites

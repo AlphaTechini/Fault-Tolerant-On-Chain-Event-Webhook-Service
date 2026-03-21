@@ -1,8 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { env } from './config';
-import { ApiKey } from './models';
+import { env } from '../config';
+import { ApiKey } from '../models';
 
 export interface AuthenticatedRequest extends FastifyRequest {
     user: {

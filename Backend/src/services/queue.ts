@@ -17,7 +17,7 @@ export const deliveryQueue = new Queue('webhook-delivery', {
             delay: 60000, // Starts at 1 min delay, goes to 2m, 4m, 8m, 16m
         },
         removeOnComplete: true, // Keep Redis clean
-        removeOnFail: false,    // Keep failed jobs for inspection
+        removeOnFail: true,     // Keep Redis clean, handle dead letters via MongoDB
     },
 });
 

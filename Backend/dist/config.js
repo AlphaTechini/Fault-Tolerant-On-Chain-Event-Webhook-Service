@@ -23,10 +23,26 @@ const envSchema = zod_1.z.object({
     FRONTEND_URL: zod_1.z.string().default('http://localhost:5173'),
     // Resend API (for email notifications)
     RESEND_API_KEY: zod_1.z.string().optional(),
+    // Redis
+    REDIS_URL: zod_1.z.string().default('redis://localhost:6379'),
+    // RPC Configuration (JSON string mapping chainId to array of fallback URLs)
+    // E.g., '{"1":["https://mainnet.infura...","https://eth-mainnet.alchemy..."]}'
+    RPC_URLS_JSON: zod_1.z.string().optional().default('{}'),
 });
 const _env = envSchema.safeParse(process.env);
 if (!_env.success) {
     console.error("❌ Invalid environment variables:", _env.error.format());
     process.exit(1);
 }
-exports.env = _env.data;
+exports.env = {
+    ..._env.data,
+    RPC_URLS: (() => {
+        try {
+            return JSON.parse(_env.data.RPC_URLS_JSON);
+        }
+        catch (err) {
+            console.error("❌ Failed to parse RPC_URLS_JSON. Ensure it is valid JSON.");
+            return {};
+        }
+    })(),
+};
