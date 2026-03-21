@@ -245,10 +245,9 @@ stateDiagram-v2
 ### Failure Recovery Strategies
 
 **RPC Connection Failures**
-- Connection pooling with health checks
-- Automatic failover to backup RPC endpoints
-- Exponential backoff with jitter
-- Circuit breaker per RPC provider
+- Native fallback transport pooling using `viem` wrapper
+- Automatic active ranking and failover to backup RPC endpoints
+- Built-in retry and timeout logic per RPC node
 
 **Event Processing Failures**
 - Dead letter queues for poison messages
@@ -712,9 +711,9 @@ sequenceDiagram
 **Consequences**: Eventual consistency, requires careful index management
 
 ### ADR-002: Message Queue Selection
-**Decision**: Redis Streams for event queuing
-**Rationale**: Persistence, consumer groups, low latency, operational simplicity
-**Consequences**: Memory usage scales with queue depth, requires clustering for HA
+**Decision**: BullMQ (Redis-backed) for webhook delivery queuing
+**Rationale**: Built-in exponential backoff, retry logic, concurrency control, and robust dashboarding capabilities
+**Consequences**: Requires Node.js worker processes, memory scales with pending jobs
 
 ### ADR-003: Webhook Retry Strategy
 **Decision**: Exponential backoff with jitter and circuit breaker
@@ -813,8 +812,8 @@ NODE_ENV=production
 MONGO_URI=mongodb://localhost:27017/event-webhook-service
 
 # RPC Configuration
-ETHEREUM_RPC_URL=https://mainnet.infura.io/v3/YOUR_KEY
-POLYGON_RPC_URL=https://polygon-mainnet.infura.io/v3/YOUR_KEY
+# Array of fallback endpoints mapped by Chain ID
+RPC_URLS_JSON='{"1":["https://mainnet.infura.io/v3/YOUR_KEY", "https://eth-mainnet.alchemyapi.io/v2/KEY"]}'
 RPC_TIMEOUT=30000
 RPC_RETRY_ATTEMPTS=3
 
