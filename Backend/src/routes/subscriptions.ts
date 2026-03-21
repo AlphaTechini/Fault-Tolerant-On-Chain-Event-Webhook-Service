@@ -1,7 +1,7 @@
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import crypto from 'crypto';
-import { Subscription, EventLog, DeliveryAttempt, User, PLAN_LIMITS, PlanTier } from '../models';
+import { Subscription, EventLog, DeliveryAttempt, User, PLAN_LIMITS, PlanTier, EventStatus } from '../models';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth';
 
 // Generate a webhook secret
@@ -34,6 +34,8 @@ const subscriptionRoutes: FastifyPluginAsyncZod = async (app) => {
                     webhookSecret: z.string().nullable(),
                     status: z.string(),
                 }),
+                403: z.object({ error: z.string() }),
+                404: z.object({ error: z.string() }),
             },
         },
     }, async (request, reply) => {
@@ -281,7 +283,7 @@ const subscriptionRoutes: FastifyPluginAsyncZod = async (app) => {
         }
 
         // Reset event for retry
-        event.status = 'PENDING';
+        event.status = EventStatus.PENDING;
         event.retryCount = 0;
         event.nextRetryAt = new Date();
         await event.save();

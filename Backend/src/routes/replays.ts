@@ -19,6 +19,9 @@ const replayRoutes: FastifyPluginAsyncZod = async (app) => {
                     message: z.string(),
                     count: z.number(),
                 }),
+                404: z.object({
+                    error: z.string(),
+                }),
             },
         },
     }, async (request, reply) => {

@@ -9,7 +9,7 @@ export const redisConnection = new IORedis(env.REDIS_URL, {
 });
 
 export const deliveryQueue = new Queue('webhook-delivery', {
-    connection: redisConnection,
+    connection: redisConnection as any,
     defaultJobOptions: {
         attempts: 5,
         backoff: {
@@ -23,7 +23,7 @@ export const deliveryQueue = new Queue('webhook-delivery', {
 
 export const startDeliveryWorker = (processor: (job: Job) => Promise<void>) => {
     const worker = new Worker('webhook-delivery', processor, {
-        connection: redisConnection,
+        connection: redisConnection as any,
         concurrency: 10, // Process 10 webhooks in parallel
     });
 

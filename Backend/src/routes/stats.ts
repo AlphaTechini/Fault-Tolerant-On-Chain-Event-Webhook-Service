@@ -36,6 +36,9 @@ const statsRoutes: FastifyPluginAsyncZod = async (app) => {
                         subscriptionId: z.string(),
                     })),
                 }),
+                404: z.object({
+                    error: z.string(),
+                }),
             },
         },
     }, async (request, reply) => {

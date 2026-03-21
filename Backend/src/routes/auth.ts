@@ -108,7 +108,7 @@ export default async function authRoutes(app: FastifyInstance) {
             if (error instanceof z.ZodError) {
                 return reply.status(400).send({
                     error: 'Validation error',
-                    details: error.errors
+                    details: error.issues
                 });
             }
             app.log.error(error);
@@ -159,7 +159,7 @@ export default async function authRoutes(app: FastifyInstance) {
             if (error instanceof z.ZodError) {
                 return reply.status(400).send({
                     error: 'Validation error',
-                    details: error.errors
+                    details: error.issues
                 });
             }
             app.log.error(error);

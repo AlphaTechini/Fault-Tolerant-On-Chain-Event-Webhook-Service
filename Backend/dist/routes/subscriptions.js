@@ -34,6 +34,8 @@ const subscriptionRoutes = async (app) => {
                     webhookSecret: zod_1.z.string().nullable(),
                     status: zod_1.z.string(),
                 }),
+                403: zod_1.z.object({ error: zod_1.z.string() }),
+                404: zod_1.z.object({ error: zod_1.z.string() }),
             },
         },
     }, async (request, reply) => {
@@ -254,7 +256,7 @@ const subscriptionRoutes = async (app) => {
             return reply.status(404).send({ error: 'Event not found' });
         }
         // Reset event for retry
-        event.status = 'PENDING';
+        event.status = models_1.EventStatus.PENDING;
         event.retryCount = 0;
         event.nextRetryAt = new Date();
         await event.save();
