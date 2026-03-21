@@ -10,19 +10,19 @@ export interface ISubscription extends Document {
   eventFilters?: string[];
   lastProcessedBlock: number;
   status: 'active' | 'paused';
-  createdAt: date;
+  createdAt: Date;
 }
 
 const SubscriptionSchema: Schema = new Schema ({
-  userId { type: mongoose.Schema.Types.ObjectId, ref: User, required: true },
-  chainId { type: Number, required: true },
-  contractAddress { type: String, required: true },
-  abi { type: Array, required: true },
-  webhook { type: String, required: true },
-  webhookSecrets { type: String },
-  eventFilters { type: [String], default: [] },
-  lastProcessedBlock { type: Number, required: true },
-  status { type: String, enum: ['active', 'paused'], default: 'active' },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  chainId: { type: Number, required: true },
+  contractAddress: { type: String, required: true },
+  abi: { type: Array, required: true },
+  webhookUrl: { type: String, required: true },
+  webhookSecret: { type: String },
+  eventFilters: { type: [String], default: [] },
+  lastProcessedBlock: { type: Number, required: true },
+  status: { type: String, enum: ['active', 'paused'], default: 'active' },
 }, 
 { timestamps: true });
 

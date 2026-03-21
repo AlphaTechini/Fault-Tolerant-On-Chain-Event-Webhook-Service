@@ -24,6 +24,9 @@ const envSchema = z.object({
 
     // Resend API (for email notifications)
     RESEND_API_KEY: z.string().optional(),
+
+    // Redis
+    REDIS_URL: z.string().default('redis://localhost:6379'),
 });
 
 const _env = envSchema.safeParse(process.env);

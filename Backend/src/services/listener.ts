@@ -2,6 +2,7 @@ import { createPublicClient, http, decodeEventLog, Abi } from 'viem';
 import { mainnet, sepolia, bsc, bscTestnet, polygon, polygonAmoy, arbitrum, optimism } from 'viem/chains';
 import { Subscription, EventLog, ISubscription } from '../models';
 import { env } from '../config';
+import { deliveryQueue } from './queue';
 
 // Map chainId to Viem Chain object
 const CHAINS: Record<number, any> = {
@@ -94,7 +95,7 @@ const processSubscription = async (sub: ISubscription) => {
                 });
 
                 // Create EventLog with decoded data
-                await EventLog.create({
+                const eventLog = await EventLog.create({
                     subscriptionId: sub._id,
                     blockNumber: Number(log.blockNumber),
                     transactionHash: log.transactionHash,
@@ -104,13 +105,16 @@ const processSubscription = async (sub: ISubscription) => {
                     status: 'PENDING',
                 });
 
+                // Enqueue to BullMQ
+                await deliveryQueue.add('deliver', { eventId: eventLog._id.toString() });
+
                 console.log(`📝 Captured event: ${decoded.eventName} at block ${log.blockNumber}`);
 
             } catch (decodeErr: any) {
                 // If decoding fails, save raw log data
                 console.warn(`Failed to decode log: ${decodeErr.message}`);
 
-                await EventLog.create({
+                const eventLog = await EventLog.create({
                     subscriptionId: sub._id,
                     blockNumber: Number(log.blockNumber),
                     transactionHash: log.transactionHash,
@@ -125,6 +129,9 @@ const processSubscription = async (sub: ISubscription) => {
                     },
                     status: 'PENDING',
                 });
+
+                // Enqueue to BullMQ even if decode failed (user might want raw)
+                await deliveryQueue.add('deliver', { eventId: eventLog._id.toString() });
             }
         }
     }
