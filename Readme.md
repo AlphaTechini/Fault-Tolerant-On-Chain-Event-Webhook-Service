@@ -256,8 +256,11 @@ stateDiagram-v2
 - Graceful degradation modes
 
 **Webhook Delivery Failures**
-- Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s
-- Maximum retry attempts: 6 (total ~63s)
+- **True Fault Tolerance** (Two-Phase Retry):
+    - **Phase 1 (Aggressive)**: 1s, 2s, 4s, 8s, 16s, 32s
+    - **Phase 2 (Relaxed)**: 1m, 5m, 15m, 30m, 1h, 2h, 4h, 8h, 12h
+- **Maximum retry attempts**: 15 (spanning ~28 hours)
+- **Automatic Jitter**: 10% randomization to prevent thundering herd
 - Permanent failure detection (4xx responses)
 - Bulk retry operations for operational recovery
 
@@ -716,9 +719,9 @@ sequenceDiagram
 **Consequences**: Requires Node.js worker processes, memory scales with pending jobs
 
 ### ADR-003: Webhook Retry Strategy
-**Decision**: Exponential backoff with jitter and circuit breaker
-**Rationale**: Prevents thundering herd, respects downstream capacity
-**Consequences**: Increased delivery latency for failing endpoints
+**Decision**: Two-Phase "True Fault Tolerance" backoff with jitter and circuit breaker.
+**Rationale**: Starts with aggressive retries for transient blips, then pivots to a relaxed, long-term retry schedule for sustained outages. This prevents early DLQ movement while respecting downstream capacity.
+**Consequences**: Maximum delivery window extended to ~28 hours; increased complexity in queue backoff logic.
 
 ### ADR-004: Dead Letter Queue (DLQ) Strategy
 **Decision**: Use a Hybrid approach: BullMQ's native retries for transient failures, and a MongoDB `DeadLetterEvent` collection for permanent failures.

@@ -142,8 +142,8 @@ const processJob = async (job: Job) => {
     } else {
         event.retryCount += 1;
 
-        // Check if this is the last attempt (job.opts.attempts default is 5)
-        const maxAttempts = job.opts.attempts || 5;
+        // Check if this is the last attempt (job.opts.attempts default is 15)
+        const maxAttempts = job.opts.attempts || 15;
         if (job.attemptsMade >= maxAttempts - 1) {
             console.log(`❌ Event ${event._id} failed permanently after ${maxAttempts} attempts. Moving to DLQ.`);
 
