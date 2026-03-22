@@ -9,8 +9,9 @@ const models_1 = require("../models");
 const email_1 = require("./email");
 const queue_1 = require("./queue");
 const circuitBreaker_1 = require("./circuitBreaker");
+const logger_1 = __importDefault(require("../utils/logger"));
 const startDeliveryService = async () => {
-    console.log("🚀 Starting Delivery Service (BullMQ)...");
+    logger_1.default.info("🚀 Starting Delivery Service (BullMQ)...");
     // Reset monthly usage at start of each month
     setInterval(resetMonthlyUsage, 3600000); // Check hourly
     // Register BullMQ Worker
@@ -31,14 +32,14 @@ const processJob = async (job) => {
     const { eventId } = job.data;
     const event = await models_1.EventLog.findById(eventId);
     if (!event) {
-        console.warn(`Event ${eventId} not found for job ${job.id}`);
+        logger_1.default.warn({ eventId, jobId: job.id }, `Event not found for job`);
         return; // Don't throw, drop the job
     }
     event.status = models_1.EventStatus.PROCESSING;
     await event.save();
     const subscription = await models_1.Subscription.findById(event.subscriptionId);
     if (!subscription) {
-        console.error(`Subscription ${event.subscriptionId} not found for event ${event._id}`);
+        logger_1.default.error({ subscriptionId: event.subscriptionId, eventId: event._id }, `Subscription not found for event`);
         event.status = models_1.EventStatus.FAILED;
         await event.save();
         return;
@@ -46,7 +47,7 @@ const processJob = async (job) => {
     // Get user and check plan limits
     const user = await models_1.User.findById(subscription.userId);
     if (!user) {
-        console.error(`User not found for subscription ${subscription._id}`);
+        logger_1.default.error({ userId: subscription.userId, subscriptionId: subscription._id }, `User not found for subscription`);
         event.status = models_1.EventStatus.FAILED;
         await event.save();
         return;
@@ -54,7 +55,11 @@ const processJob = async (job) => {
     // Check if user has exceeded their plan limit
     const planLimit = models_1.PLAN_LIMITS[user.plan].eventsPerMonth;
     if (user.eventsThisMonth >= planLimit) {
-        console.warn(`User ${user._id} has exceeded plan limit (${user.eventsThisMonth}/${planLimit})`);
+        logger_1.default.warn({
+            userId: user._id,
+            usage: user.eventsThisMonth,
+            limit: planLimit
+        }, `User has exceeded plan limit`);
         // We throw a specific error so BullMQ retries, but wait, if plan limit exceeded it will continuously fail.
         // The original logic just kept it PENDING for 1 hour.
         // We will throw an error to trigger BullMQ retry, but this uses up attempts.
@@ -119,14 +124,22 @@ const processJob = async (job) => {
         await event.save();
         // Increment user's usage count
         await models_1.User.findByIdAndUpdate(user._id, { $inc: { eventsThisMonth: 1 } });
-        console.log(`✅ Event ${event._id} delivered to ${subscription.webhookUrl}`);
+        logger_1.default.info({
+            eventId: event._id,
+            subscriptionId: subscription._id,
+            webhookUrl: subscription.webhookUrl,
+            status: responseStatus
+        }, `✅ Event delivered`);
     }
     else {
         event.retryCount += 1;
-        // Check if this is the last attempt (job.opts.attempts default is 5)
-        const maxAttempts = job.opts.attempts || 5;
+        // Check if this is the last attempt (job.opts.attempts default is 15)
+        const maxAttempts = job.opts.attempts || 15;
         if (job.attemptsMade >= maxAttempts - 1) {
-            console.log(`❌ Event ${event._id} failed permanently after ${maxAttempts} attempts. Moving to DLQ.`);
+            logger_1.default.error({
+                eventId: event._id,
+                attempts: maxAttempts
+            }, `❌ Event failed permanently. Moving to DLQ.`);
             // --- Hybrid DLQ Architecture ---
             // Move poisoned event out of EventLog into DeadLetterEvent to keep EventLog lean
             // BullMQ will remove the job from Redis because `removeOnFail: true` is set in queue.ts

@@ -2,7 +2,7 @@ import { createPublicClient, http, fallback, decodeEventLog, Abi } from 'viem';
 import { mainnet, sepolia, bsc, bscTestnet, polygon, polygonAmoy, arbitrum, optimism } from 'viem/chains';
 import { Subscription, EventLog, ISubscription } from '../models';
 import { env } from '../config';
-import { deliveryQueue } from './queue';
+import { deliveryQueue, redisConnection } from './queue';
 import logger from '../utils/logger';
 
 // Map chainId to Viem Chain object
@@ -112,16 +112,43 @@ const processSubscription = async (sub: ISubscription) => {
                     topics: log.topics,
                 });
 
-                // Create EventLog with decoded data
-                const eventLog = await EventLog.create({
-                    subscriptionId: sub._id,
-                    blockNumber: Number(log.blockNumber),
-                    transactionHash: log.transactionHash,
-                    logIndex: Number(log.logIndex),
-                    eventName: decoded.eventName,
-                    payload: decoded.args, // Just the args, as we have top-level fields for others
-                    status: 'PENDING',
-                });
+                // --- Deduplication Shield (Redis) ---
+                const dedupeKey = `event:dedupe:${log.transactionHash}:${log.logIndex}`;
+                // Set key with 72-hour TTL (259200 seconds), only if it doesn't already exist
+                const isNew = await redisConnection.set(dedupeKey, '1', 'EX', 259200, 'NX');
+                
+                if (!isNew) {
+                    logger.debug({ 
+                        transactionHash: log.transactionHash,
+                        logIndex: log.logIndex
+                    }, 'Skip: Event already processed (Redis cache hit)');
+                    continue; // Skip to next log
+                }
+
+                // --- Permanent Storage (MongoDB) ---
+                let eventLog;
+                try {
+                    // Create EventLog with decoded data
+                    eventLog = await EventLog.create({
+                        subscriptionId: sub._id,
+                        blockNumber: Number(log.blockNumber),
+                        transactionHash: log.transactionHash,
+                        logIndex: Number(log.logIndex),
+                        eventName: decoded.eventName,
+                        payload: decoded.args, // Just the args, as we have top-level fields for others
+                        status: 'PENDING',
+                    });
+                } catch (dbErr: any) {
+                    // E11000 is MongoDB's Duplicate Key error code
+                    if (dbErr.code === 11000) {
+                        logger.warn({
+                            transactionHash: log.transactionHash,
+                            logIndex: log.logIndex
+                        }, 'Skip: Event rejected by DB unique index (Cache miss/expiry but DB caught it)');
+                        continue;
+                    }
+                    throw dbErr; // Rethrow other unexpected errors
+                }
 
                 // Enqueue to BullMQ
                 await deliveryQueue.add('deliver', { eventId: eventLog._id.toString() });
@@ -141,21 +168,30 @@ const processSubscription = async (sub: ISubscription) => {
                     subscriptionId: sub._id 
                 }, `Failed to decode log: ${decodeErr.message}`);
 
-                const eventLog = await EventLog.create({
-                    subscriptionId: sub._id,
-                    blockNumber: Number(log.blockNumber),
-                    transactionHash: log.transactionHash,
-                    logIndex: Number(log.logIndex), // Still capture index
-                    eventName: 'UnknownEvent',
-                    payload: {
-                        raw: {
-                            data: log.data,
-                            topics: log.topics,
+                // Create raw event log fallback
+                let eventLog;
+                try {
+                    eventLog = await EventLog.create({
+                        subscriptionId: sub._id,
+                        blockNumber: Number(log.blockNumber),
+                        transactionHash: log.transactionHash,
+                        logIndex: Number(log.logIndex), // Still capture index
+                        eventName: 'UnknownEvent',
+                        payload: {
+                            raw: {
+                                data: log.data,
+                                topics: log.topics,
+                            },
+                            decodeError: decodeErr.message,
                         },
-                        decodeError: decodeErr.message,
-                    },
-                    status: 'PENDING',
-                });
+                        status: 'PENDING',
+                    });
+                } catch (dbErr: any) {
+                    if (dbErr.code === 11000) {
+                        continue; // Same duplicate check for decode-failed logs
+                    }
+                    throw dbErr;
+                }
 
                 // Enqueue to BullMQ even if decode failed (user might want raw)
                 await deliveryQueue.add('deliver', { eventId: eventLog._id.toString() });

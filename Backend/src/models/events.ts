@@ -34,6 +34,8 @@ const EventLogSchema: Schema = new Schema({
 
 EventLogSchema.index({ status: 1, nextRetryAt: 1 });
 EventLogSchema.index({ subscriptionId: 1, createdAt: -1 });
+// Enforce strict deduplication at the DB layer
+EventLogSchema.index({ transactionHash: 1, logIndex: 1 }, { unique: true });
 
 export const EventLog = mongoose.model<IEventLog>('EventLog', EventLogSchema);
 

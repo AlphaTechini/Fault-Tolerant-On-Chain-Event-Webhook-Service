@@ -733,6 +733,11 @@ sequenceDiagram
 **Rationale**: Prevents cascading failures and stops hammering webhook endpoints that are known to be down for extended periods, preserving internal worker threads and outbound bandwidth.
 **Consequences**: Currently implemented as an **in-memory** construct. If horizontally scaled across multiple Node.js instances, circuit state is not shared. For a multi-node cluster, a Redis-backed Circuit Breaker would be required.
 
+### ADR-006: Event Deduplication Strategy
+**Decision**: Use a hybrid Redis `SET` shield combined with MongoDB compound unique indexes (`transactionHash` + `logIndex`).
+**Rationale**: Ensures exactly-once processing. Redis acts as a high-speed, volatile shield (absorbing 99.9% of duplicates before hitting the DB), while MongoDB acts as the permanent source of truth for deduplication. This prevents wasted database I/O and BullMQ job overhead compared to DB-only deduplication, while avoiding the false-positives of a pure Bloom filter.
+**Consequences**: Code complexity slightly increases by managing two layers of state. Redis keys must have TTLs to prevent memory bloat, relying on MongoDB to catch any duplicates arriving after the TTL expires.
+
 ## Getting Started
 
 ### Prerequisites
