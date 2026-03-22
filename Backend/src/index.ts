@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import underPressure from '@fastify/under-pressure';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { env } from './config';
 import { connectDB } from './db';
@@ -13,7 +14,13 @@ import { startEventListener } from './services/listener';
 import { startDeliveryService } from './services/delivery';
 
 const app = Fastify({
-    logger: true,
+    logger: {
+        level: env.NODE_ENV === 'production' ? 'info' : 'debug',
+        timestamp: () => `,"time":"${new Date().toISOString()}"`,
+        formatters: {
+            level: (label) => ({ level: label.toUpperCase() }),
+        },
+    },
 }).withTypeProvider<ZodTypeProvider>();
 
 app.setValidatorCompiler(validatorCompiler);
@@ -40,6 +47,31 @@ const start = async () => {
             }),
         });
 
+        // Health Monitoring Logic
+        await app.register(underPressure, {
+            maxEventLoopDelay: 1000,
+            maxHeapUsedBytes: 1000000000,
+            maxRssBytes: 1000000000,
+            exposeStatusRoute: {
+                url: '/health',
+                routeResponseSchemaOpts: {
+                    status: { type: 'string' },
+                    metrics: {
+                        type: 'object',
+                        properties: {
+                            eventLoopDelay: { type: 'number' },
+                            rssBytes: { type: 'number' },
+                            heapUsedBytes: { type: 'number' },
+                        }
+                    }
+                }
+            },
+            healthCheck: async (instance) => {
+                // Add custom health checks if needed
+                return true;
+            }
+        });
+
         // API Routes
         await app.register(subscriptionRoutes, { prefix: '/api' });
         await app.register(authRoutes);
@@ -47,7 +79,7 @@ const start = async () => {
         await app.register(statsRoutes, { prefix: '/api' });
         await app.register(replayRoutes, { prefix: '/api' });
 
-        // Health check
+        // Root check
         app.get('/', async (request, reply) => {
             return { status: 'ok', service: 'Contract Webhook API' };
         });
@@ -57,7 +89,7 @@ const start = async () => {
         startDeliveryService();
 
         await app.listen({ port: parseInt(env.PORT), host: '0.0.0.0' });
-        console.log(`🚀 Server running on port ${env.PORT}`);
+        app.log.info(`🚀 Server running on port ${env.PORT}`);
 
     } catch (err) {
         app.log.error(err);

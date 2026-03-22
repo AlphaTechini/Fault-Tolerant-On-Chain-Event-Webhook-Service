@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000" # Mapping to 3001 to avoid potential conflicts
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - monitoring
+
+  vector:
+    image: timberio/vector:latest-debian
+    container_name: vector
+    volumes:
+      - ./vector.toml:/etc/vector/vector.toml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "9598:9598" # Exposing the metrics exporter port
+    environment:
+      - VECTOR_CONFIG=/etc/vector/vector.toml
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+      - prometheus
+
+networks:
+  monitoring:
+    name: observability_network
+    driver: bridge

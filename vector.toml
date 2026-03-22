@@ -1,0 +1,61 @@
+# Vector Configuration for Event Webhook Service
+# This configures Vector to scrape Docker logs, parse JSON, and route to Loki/Prometheus.
+
+[sources.docker_logs]
+type = "docker_logs"
+# We'll scrape all logs and filter by container label or name in the transform
+# Alternatively, specify the container name if known
+include_containers = ["backend"] 
+
+[transforms.json_parser]
+type = "remap"
+inputs = ["docker_logs"]
+source = """
+# Parse the JSON log line from Pino
+parsed, err = parse_json(.message)
+if err == null {
+    . = parsed
+}
+
+# Add some metadata for Loki
+.service = "backend"
+"""
+
+# Derive Prometheus metrics from log events
+[transforms.webhook_delivery_metrics]
+type = "metric_from_log"
+inputs = ["json_parser"]
+
+[[transforms.webhook_delivery_metrics.metrics]]
+type = "counter"
+name = "webhook_delivery_total"
+field = "msg"
+payload_key = "status" # Not needed for simple counter but good to have
+# Filter for successful delivery logs
+condition = 'includes(["✅ Event delivered"], .msg)'
+[transforms.webhook_delivery_metrics.metrics.tags]
+status = "{{status}}"
+subscription_id = "{{subscriptionId}}"
+
+[[transforms.webhook_delivery_metrics.metrics]]
+type = "counter"
+name = "on_chain_events_total"
+field = "msg"
+condition = 'includes(["📝 Captured event"], .msg)'
+[transforms.webhook_delivery_metrics.metrics.tags]
+event_name = "{{eventName}}"
+chain_id = "{{chainId}}"
+
+# Sinks
+[sinks.loki_sink]
+type = "loki"
+inputs = ["json_parser"]
+endpoint = "http://loki:3100"
+encoding.codec = "json"
+labels.service = "{{service}}"
+labels.env = "{{env}}"
+
+[sinks.prometheus_sink]
+type = "prometheus_exporter"
+inputs = ["webhook_delivery_metrics"]
+address = "0.0.0.0:9598" # Port for Prometheus to scrape Vector

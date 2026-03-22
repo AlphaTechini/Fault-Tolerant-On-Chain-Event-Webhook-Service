@@ -17,6 +17,9 @@ importers:
       '@fastify/rate-limit':
         specifier: ^10.3.0
         version: 10.3.0
+      '@fastify/under-pressure':
+        specifier: ^9.0.3
+        version: 9.0.3
       argon2:
         specifier: ^0.44.0
         version: 0.44.0
@@ -47,6 +50,9 @@ importers:
       opossum:
         specifier: ^9.0.0
         version: 9.0.0
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
       resend:
         specifier: ^6.9.1
         version: 6.9.1
@@ -123,6 +129,9 @@ packages:
 
   '@fastify/swagger@9.6.1':
     resolution: {integrity: sha512-fKlpJqFMWoi4H3EdUkDaMteEYRCfQMEkK0HJJ0eaf4aRlKd8cbq0pVkOfXDXmtvMTXYcnx3E+l023eFDBsA1HA==}
+
+  '@fastify/under-pressure@9.0.3':
+    resolution: {integrity: sha512-uWzyFn9ThgGgynxyoX/kqgLtPtNBXXvQgN3U8fSRPNBS1y5mEZC/uCBRx03hXm9PDsQwTGN7qt83ItsHVQ0L4A==}
 
   '@hapi/boom@10.0.1':
     resolution: {integrity: sha512-ERcCZaEjdH3OgSJlyjVk8pHIFeus91CjKP3v+MpgBNp5IvGzP2l/bRiD78nqYcKPaZdbKkK5vDBVPd2ohHBlsA==}
@@ -771,8 +780,8 @@ packages:
   pino-std-serializers@7.1.0:
     resolution: {integrity: sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw==}
 
-  pino@10.3.0:
-    resolution: {integrity: sha512-0GNPNzHXBKw6U/InGe79A3Crzyk9bcSyObF9/Gfo9DLEf5qj5RF50RSjsu0W1rZ6ZqRGdzDFCRBQvi9/rSGPtA==}
+  pino@10.3.1:
+    resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
     hasBin: true
 
   process-warning@4.0.1:
@@ -1089,6 +1098,11 @@ snapshots:
       yaml: 2.8.2
     transitivePeerDependencies:
       - supports-color
+
+  '@fastify/under-pressure@9.0.3':
+    dependencies:
+      '@fastify/error': 4.2.0
+      fastify-plugin: 5.1.0
 
   '@hapi/boom@10.0.1':
     dependencies:
@@ -1429,7 +1443,7 @@ snapshots:
       fast-json-stringify: 6.2.0
       find-my-way: 9.4.0
       light-my-request: 6.6.0
-      pino: 10.3.0
+      pino: 10.3.1
       process-warning: 5.0.0
       rfdc: 1.4.1
       secure-json-parse: 4.1.0
@@ -1764,7 +1778,7 @@ snapshots:
 
   pino-std-serializers@7.1.0: {}
 
-  pino@10.3.0:
+  pino@10.3.1:
     dependencies:
       '@pinojs/redact': 0.4.0
       atomic-sleep: 1.0.0

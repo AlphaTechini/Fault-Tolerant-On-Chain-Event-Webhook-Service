@@ -3,6 +3,7 @@ import { mainnet, sepolia, bsc, bscTestnet, polygon, polygonAmoy, arbitrum, opti
 import { Subscription, EventLog, ISubscription } from '../models';
 import { env } from '../config';
 import { deliveryQueue } from './queue';
+import logger from '../utils/logger';
 
 // Map chainId to Viem Chain object
 const CHAINS: Record<number, any> = {
@@ -45,14 +46,14 @@ const getClient = (chainId: number) => {
 };
 
 export const startEventListener = async () => {
-    console.log("🚀 Starting Event Listener Service...");
+    logger.info("🚀 Starting Event Listener Service...");
 
     // Polling loop
     setInterval(async () => {
         try {
             await processSubscriptions();
         } catch (err) {
-            console.error("Error in event listener loop:", err);
+            logger.error({ err }, "Error in event listener loop");
         }
     }, 10000); // Poll every 10 seconds
 };
@@ -64,7 +65,7 @@ const processSubscriptions = async () => {
         try {
             await processSubscription(sub);
         } catch (err) {
-            console.error(`Error processing sub ${sub._id}:`, err);
+            logger.error({ err, subscriptionId: sub._id }, `Error processing sub ${sub._id}`);
         }
     }
 };
@@ -95,7 +96,12 @@ const processSubscription = async (sub: ISubscription) => {
     });
 
     if (logs.length > 0) {
-        console.log(`Found ${logs.length} logs for ${sub.contractAddress} blocks ${startBlock + 1}-${endBlock}`);
+        logger.info({ 
+            logCount: logs.length, 
+            contractAddress: sub.contractAddress, 
+            chainId: sub.chainId,
+            blockRange: { start: startBlock + 1, end: endBlock }
+        }, `Found ${logs.length} logs`);
 
         for (const log of logs) {
             try {
@@ -120,11 +126,20 @@ const processSubscription = async (sub: ISubscription) => {
                 // Enqueue to BullMQ
                 await deliveryQueue.add('deliver', { eventId: eventLog._id.toString() });
 
-                console.log(`📝 Captured event: ${decoded.eventName} at block ${log.blockNumber}`);
+                logger.info({ 
+                    eventName: decoded.eventName, 
+                    blockNumber: Number(log.blockNumber),
+                    transactionHash: log.transactionHash,
+                    subscriptionId: sub._id
+                }, `📝 Captured event: ${decoded.eventName}`);
 
             } catch (decodeErr: any) {
                 // If decoding fails, save raw log data
-                console.warn(`Failed to decode log: ${decodeErr.message}`);
+                logger.warn({ 
+                    err: decodeErr, 
+                    transactionHash: log.transactionHash,
+                    subscriptionId: sub._id 
+                }, `Failed to decode log: ${decodeErr.message}`);
 
                 const eventLog = await EventLog.create({
                     subscriptionId: sub._id,

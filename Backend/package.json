@@ -17,6 +17,7 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/oauth2": "^8.1.2",
     "@fastify/rate-limit": "^10.3.0",
+    "@fastify/under-pressure": "^9.0.3",
     "argon2": "^0.44.0",
     "bullmq": "^5.71.0",
     "cors": "^2.8.6",
@@ -27,6 +28,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.5",
     "opossum": "^9.0.0",
+    "pino": "^10.3.1",
     "resend": "^6.9.1",
     "viem": "^2.45.0",
     "zod": "^4.3.6"

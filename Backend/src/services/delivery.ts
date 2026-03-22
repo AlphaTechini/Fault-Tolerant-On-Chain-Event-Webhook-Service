@@ -1,12 +1,14 @@
 import crypto from 'crypto';
 import { Job } from 'bullmq';
 import { EventLog, DeliveryAttempt, Subscription, EventStatus, User, PLAN_LIMITS, PlanTier, DeadLetterEvent } from '../models';
+import { env } from '../config';
 import { sendFailureNotification } from './email';
 import { startDeliveryWorker } from './queue';
 import { getCircuitBreaker } from './circuitBreaker';
+import logger from '../utils/logger';
 
 export const startDeliveryService = async () => {
-    console.log("🚀 Starting Delivery Service (BullMQ)...");
+    logger.info("🚀 Starting Delivery Service (BullMQ)...");
 
     // Reset monthly usage at start of each month
     setInterval(resetMonthlyUsage, 3600000); // Check hourly
@@ -36,7 +38,7 @@ const processJob = async (job: Job) => {
     const event = await EventLog.findById(eventId);
     
     if (!event) {
-        console.warn(`Event ${eventId} not found for job ${job.id}`);
+        logger.warn({ eventId, jobId: job.id }, `Event not found for job`);
         return; // Don't throw, drop the job
     }
 
@@ -45,7 +47,7 @@ const processJob = async (job: Job) => {
 
     const subscription = await Subscription.findById(event.subscriptionId);
     if (!subscription) {
-        console.error(`Subscription ${event.subscriptionId} not found for event ${event._id}`);
+        logger.error({ subscriptionId: event.subscriptionId, eventId: event._id }, `Subscription not found for event`);
         event.status = EventStatus.FAILED;
         await event.save();
         return;
@@ -54,7 +56,7 @@ const processJob = async (job: Job) => {
     // Get user and check plan limits
     const user = await User.findById(subscription.userId);
     if (!user) {
-        console.error(`User not found for subscription ${subscription._id}`);
+        logger.error({ userId: subscription.userId, subscriptionId: subscription._id }, `User not found for subscription`);
         event.status = EventStatus.FAILED;
         await event.save();
         return;
@@ -63,7 +65,11 @@ const processJob = async (job: Job) => {
     // Check if user has exceeded their plan limit
     const planLimit = PLAN_LIMITS[user.plan as PlanTier].eventsPerMonth;
     if (user.eventsThisMonth >= planLimit) {
-        console.warn(`User ${user._id} has exceeded plan limit (${user.eventsThisMonth}/${planLimit})`);
+        logger.warn({ 
+            userId: user._id, 
+            usage: user.eventsThisMonth, 
+            limit: planLimit 
+        }, `User has exceeded plan limit`);
         // We throw a specific error so BullMQ retries, but wait, if plan limit exceeded it will continuously fail.
         // The original logic just kept it PENDING for 1 hour.
         // We will throw an error to trigger BullMQ retry, but this uses up attempts.
@@ -138,14 +144,22 @@ const processJob = async (job: Job) => {
         // Increment user's usage count
         await User.findByIdAndUpdate(user._id, { $inc: { eventsThisMonth: 1 } });
 
-        console.log(`✅ Event ${event._id} delivered to ${subscription.webhookUrl}`);
+        logger.info({ 
+            eventId: event._id, 
+            subscriptionId: subscription._id,
+            webhookUrl: subscription.webhookUrl,
+            status: responseStatus
+        }, `✅ Event delivered`);
     } else {
         event.retryCount += 1;
 
         // Check if this is the last attempt (job.opts.attempts default is 15)
         const maxAttempts = job.opts.attempts || 15;
         if (job.attemptsMade >= maxAttempts - 1) {
-            console.log(`❌ Event ${event._id} failed permanently after ${maxAttempts} attempts. Moving to DLQ.`);
+            logger.error({ 
+                eventId: event._id, 
+                attempts: maxAttempts 
+            }, `❌ Event failed permanently. Moving to DLQ.`);
 
             // --- Hybrid DLQ Architecture ---
             // Move poisoned event out of EventLog into DeadLetterEvent to keep EventLog lean
