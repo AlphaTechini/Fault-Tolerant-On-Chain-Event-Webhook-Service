@@ -54,17 +54,25 @@ const start = async () => {
             maxRssBytes: 1000000000,
             exposeStatusRoute: {
                 url: '/health',
+                routeOpts: {
+                    logLevel: 'debug'
+                } as object,
                 routeResponseSchemaOpts: {
-                    status: { type: 'string' },
-                    metrics: {
+                    200: {
                         type: 'object',
                         properties: {
-                            eventLoopDelay: { type: 'number' },
-                            rssBytes: { type: 'number' },
-                            heapUsedBytes: { type: 'number' },
+                            status: { type: 'string' },
+                            metrics: {
+                                type: 'object',
+                                properties: {
+                                    eventLoopDelay: { type: 'number' },
+                                    rssBytes: { type: 'number' },
+                                    heapUsedBytes: { type: 'number' },
+                                }
+                            }
                         }
                     }
-                }
+                } as object
             },
             healthCheck: async (instance) => {
                 // Add custom health checks if needed
